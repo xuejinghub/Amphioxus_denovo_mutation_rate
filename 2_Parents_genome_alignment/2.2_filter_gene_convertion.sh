@@ -9,19 +9,29 @@
 para=asm20
 threads=10
 
+# Process each contig in parallel array jobs
 cat split/contig.list_part_${SLURM_ARRAY_TASK_ID} | while read line;
 do
     parent=$(echo $line | awk -F "_" '{print $NF}')
+    
+    # Align modified contigs to original assembly
     minimap2 -cx ${para} -t $threads --secondary=no --cs tmp/Bf_${parent}_remove${line}_platanus_i3_allPhasedScaffold.rename.min150bp.fa  tmp/${line}.fa > tmp/${line}.${para}.paf
+    
+    # Sort PAF file by target contig and position
     sort -k6,6 -k8,8n tmp/${line}.${para}.paf > tmp/${line}.${para}.srt.paf
+    
+    # Call variants using paftools (min alignment length 100bp)
     paftools.js  call -l 100 -L 100 tmp/${line}.${para}.srt.paf > tmp/${line}.${para}.var.txt
 done
 
+# Generate alignment statistics per contig
 cat split/contig.list_part_${SLURM_ARRAY_TASK_ID} | while read line;
 do
+    # Count unique aligned references
     grep -v "@" tmp/${line}.${para}.sam | cut -f 3 | sort | uniq | awk 'END{print "'$line'""\t" NR}' 
 done > tmp/part${SLURM_ARRAY_TASK_ID}.stats
 
+# Filter de novo mutations (DNM) against known variants
 cat tmp/*.asm20.var.txt | sed '1d' | awk -F "\t" '
 BEGIN {OFS="\t"}
 NR==FNR {

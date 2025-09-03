@@ -46,6 +46,7 @@ then
         -h tmp/${prefix}_qc2_fastp_report.html \
         -c
 fi
+# # Step 3: Assemble reads with Platanus
 
 platanus_allee assemble \
     -m 200 -t 20 \

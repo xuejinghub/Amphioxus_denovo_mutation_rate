@@ -7,13 +7,11 @@ import argparse
 from multiprocessing import Pool
 from collections import defaultdict
 
-
-#version 0.4 changes
-# 1. Added process hard clipping in find_contig_position function
-
-
+# Version 0.4 changes:
+# 1. Added processing of hard clipping in find_contig_position function
 
 def parse_arguments():
+    """Parse command line arguments for the script"""
     parser = argparse.ArgumentParser(
         description='Process trio contigs with parallel processing support',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -33,10 +31,12 @@ def parse_arguments():
     return parser.parse_args()
 
 def get_parent_from_contig(contig_id: str):
+    """Determine parent origin based on contig ID suffix"""
     suffix = contig_id[-4:]
     return "mother" if suffix == "Bf_M" else "father" if suffix == "Bf_P" else None
 
 def find_contig_position(read, target_ref_pos):
+    """Find corresponding position in contig for given reference position"""
     if read.is_unmapped:
         return None, None
 
@@ -44,11 +44,12 @@ def find_contig_position(read, target_ref_pos):
     contig_pos = 0
     seq_pos = 0
 
+    # Process CIGAR operations to map reference position to contig position
     for op, length in read.cigartuples:
         if ref_pos > target_ref_pos:
             break
             
-        if op in (0, 7, 8):
+        if op in (0, 7, 8):  # Match/mismatch operations
             op_end = ref_pos + length
             if ref_pos <= target_ref_pos < op_end:
                 offset = target_ref_pos - ref_pos
@@ -58,17 +59,17 @@ def find_contig_position(read, target_ref_pos):
             ref_pos += length
             contig_pos += length
             seq_pos += length
-        elif op in (1, 4):
+        elif op in (1, 4):  # Insertion or soft-clip
             contig_pos += length
-            seq_pos += length #if op == 1 else 0
-        elif op in (2, 3):
+            seq_pos += length
+        elif op in (2, 3):  # Deletion or reference skip
             ref_pos += length
-        elif op == 5:
-            contig_pos += length  # 仅影响contig坐标
+        elif op == 5:  # Hard clip
+            contig_pos += length  # Only affects contig coordinates
     return None, None
 
 def process_region(args):
-    """处理单个基因组区域的独立工作进程"""
+    """Process a single genomic region in an independent worker process"""
     bam_path, ref_path, chrom, start, end, output_tmp, uncallable_tmp = args
     try:
         with (pysam.AlignmentFile(bam_path, "rb") as samfile,
@@ -76,7 +77,7 @@ def process_region(args):
              open(output_tmp, 'w') as out_fd,
              open(uncallable_tmp, 'w') as uncall_fd):
 
-            # 遍历指定区域内的所有位点
+            # Iterate through all positions in the specified region
             for pileup_col in samfile.pileup(chrom, start, end, stepper="nofilter"):
                 ref_pos_0based = pileup_col.reference_pos
                 if not (start <= ref_pos_0based < end):
@@ -102,33 +103,31 @@ def process_region(args):
                     if contig_pos is None or base is None:
                         continue
                     
+                    # Handle reverse strand orientation
                     if read.is_reverse:
                         contig_length = read.infer_query_length(always=True) 
                         contig_pos = contig_length - contig_pos - 1
-                    #     if base in "AT":
-                    #         base = "AT"[("AT".index(base) + 1) % 2]
-                    #     elif base in "CG":
-                    #         base = "CG"[("CG".index(base) + 1) % 2]
                     
                     parent_map[parent].append((
                         read.query_name,
-                        contig_pos + 1,
+                        contig_pos + 1,  # Convert to 1-based position
                         base
                     ))
 
-                # 判断是否可调用
+                # Determine if position is callable
                 mother_count = len(parent_map.get("mother", []))
                 father_count = len(parent_map.get("father", []))
                 total = mother_count + father_count
                 uncallable = False
                 
+                # Uncallable conditions based on read counts
                 if total > 4 or (total == 3 and (mother_count == 3 or father_count == 3)) \
                     or (total == 4 and (mother_count > 2 or father_count > 2)) \
                     or (total == 2 and (mother_count > 1 or father_count > 1)) or total == 0:
                     uncall_fd.write(f"{chrom}\t{ref_pos_1based}\n")
                     continue
                 
-                # 格式化输出行
+                # Format output line with allele information
                 def fmt_alleles(alleles):
                     return [f"{cid}:{pos}:{base}" for cid, pos, base in alleles[:2]] + ["NA"]*(2-len(alleles))
                 
@@ -150,19 +149,19 @@ def process_region(args):
 def main():
     args = parse_arguments()
     
-    # 确保临时目录存在
+    # Ensure temporary directory exists
     os.makedirs(args.tmp_dir, exist_ok=True)
 
-    # 获取染色体长度信息
+    # Get chromosome length information from BAM header
     with pysam.AlignmentFile(args.input, "rb") as samfile:
         chrom_info = [(name, length) for name, length in zip(samfile.references, samfile.lengths)]
     
-    # 生成并行任务参数（按1MB区间分割）
-    TASK_CHUNK = 1_000_000  # 1MB区间
+    # Generate parallel task parameters (1MB chunks)
+    TASK_CHUNK = 1_000_000
     tasks = []
     tmp_files = []
     
-    # 创建临时文件（使用用户指定临时目录）
+    # Create temporary files in specified temp directory
     for chrom, length in chrom_info:
         for chunk_start in range(0, length, TASK_CHUNK):
             chunk_end = min(chunk_start + TASK_CHUNK, length)
@@ -177,20 +176,20 @@ def main():
             tasks.append((args.input, args.reference, chrom, chunk_start, chunk_end, output_tmp, uncallable_tmp))
             tmp_files.append((output_tmp, uncallable_tmp))
     
-    # 并行处理
+    # Parallel processing with worker pool
     with Pool(processes=args.threads) as pool:
         results = pool.map(process_region, tasks)
     
-    # 合并结果文件
+    # Merge results from temporary files
     with open(args.output, 'w') as out_final, open(args.uncallable, 'w') as uncall_final:
-        # 写入表头
+        # Write output header
         out_final.write("\t".join([
             "ref_chr", "ref_pos", "ref_allele",
             "mother_allele1", "mother_allele2",
             "father_allele1", "father_allele2",
             "genotype"]) + "\n")
         
-        # 按染色体顺序合并临时文件
+        # Merge files in chromosomal order
         for output_tmp, uncallable_tmp in tmp_files:
             if os.path.exists(output_tmp):
                 with open(output_tmp) as f:

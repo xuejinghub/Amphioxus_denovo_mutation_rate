@@ -39,11 +39,11 @@ def get_all_contigs(*temp_dirs):
     return list(all_contigs)
 
 def safe_contig_name(contig):
-    """生成安全的文件名并保留原始contig映射"""
+    """Generate safe filename while preserving original contig mapping"""
     return hashlib.md5(contig.encode()).hexdigest()
 
 def split_bed_to_temp(input_file, temp_dir):
-    """将BED文件拆分为按contig的临时文件，并保存元数据"""
+    """Split BED file into contig-based temporary files and save metadata"""
     os.makedirs(temp_dir, exist_ok=True)
     metadata = {}
     open_func = gzip.open if input_file.endswith('.gz') else open
@@ -114,7 +114,7 @@ def get_progeny_avg_depth(pr_id):
                 if line.startswith("total"):
                     return float(line.split("\t")[3])
     except FileNotFoundError:
-        print(f"未找到文件：{file_path}")
+        print(f"File not found: {file_path}")
     return None
 
 def process_contig(args):
@@ -255,17 +255,17 @@ def calculate_interval_depth(sorted_intervals, win_start, win_end):
     if win_len <= 0:
         return 0.0
     
-    # 提取预先生成的起止点列表
+    # Extract pre-generated start/end lists
     starts = [s for s, e, d in sorted_intervals]
     ends = [e for s, e, d in sorted_intervals]
     depths = [d for s, e, d in sorted_intervals]
     
     total = 0.0
     
-    # 通过bisect确定检查范围
-    # 第一个可能重叠的区间：ends[i] > win_start
+    # Determine check range using bisect
+    # First possible overlapping interval: ends[i] > win_start
     left = bisect.bisect_right(ends, win_start)
-    # 最后一个可能重叠的区间：starts[i] < win_end
+    # Last possible overlapping interval: starts[i] < win_end
     right = bisect.bisect_left(starts, win_end)
     
     for i in range(left, right):
@@ -324,12 +324,12 @@ def safe_cosine(a, b):
         return 0.0
     return np.dot(a, b) / (norm_a * norm_b)
 
-# 新增加权Jaccard计算函数
+# Newly added weighted Jaccard calculation function
 def safe_weighted_jaccard(a, b):
     a = np.array(a)
     b = np.array(b)
     
-    # 处理全零情况
+    # Handle all-zero case
     if np.all(a == 0) and np.all(b == 0):
         return 1.0 
     
@@ -474,7 +474,7 @@ def write_results(output_file, stats_file,results):
         return True
     
     except Exception as e:
-        print(f"写入文件时发生未知错误：{str(e)}")
+        print(f"Unknown error occurred while writing file: {str(e)}")
 
     return False
 
