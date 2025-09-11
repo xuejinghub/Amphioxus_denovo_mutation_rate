@@ -1,21 +1,24 @@
 #!/bin/bash
-#SBATCH -w node80
 #SBATCH -c 3
 #SBATCH --time=48:00:00                     
 #SBATCH --mem=10G
 #SBATCH -J CombineGVCFs
 #SBATCH -o log/CombineGVCFs_%a.%j.out
 
+# Job resource specifications (cores, time, memory, job name, output log)
+
+# Create output directory if it doesn't exist
 if [ ! -d gvcf ]; then
     mkdir gvcf
 fi
 
+# Set chromosome prefix from SLURM array task ID, handle special case for Chr16
 prefix=Chr${SLURM_ARRAY_TASK_ID}
-
 if [ "$prefix" = "Chr16" ]; then
     prefix="Chr1620"
 fi
 
+# Combine GVCF files from multiple samples for the current chromosome
 gatk --java-options "-Xmx10g" CombineGVCFs \
     -R bf.dnm/reference/bf.fa \
     --tmp-dir bf.snvCalling/combinedgVCF/tmp \
@@ -57,7 +60,7 @@ gatk --java-options "-Xmx10g" CombineGVCFs \
 	-V variant_calling/haplotypecaller/SRR12010250/SRR12010250.haplotypecaller.g.vcf.gz \
 	-V variant_calling/haplotypecaller/SRR12010223/SRR12010223.haplotypecaller.g.vcf.gz
 
-
+# Genotype the combined GVCF to produce raw variants
 gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" GenotypeGVCFs \
   --variant gvcf/Bf_inds35_${prefix}.g.vcf.gz \
   --heterozygosity 0.3 \
@@ -68,11 +71,13 @@ gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" GenotypeGVCFs \
   -R bf.dnm/reference/bf.fa \
   --tmp-dir tmp 
 
+# Extract only SNP variants from raw variants
 gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" SelectVariants \
     -V chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.vcf.gz \
     -select-type SNP \
     -O chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.vcf.gz
 
+# Apply hard filters to SNP variants
 gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" VariantFiltration \
     --variant chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.vcf.gz  \
     --filter "QD < 2.0" --filter-name "QD2" \
@@ -84,17 +89,20 @@ gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" VariantFiltration \
     --filter "ReadPosRankSum < -8.0" --filter-name "ReadPosRankSum-8" \
     --output chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.filtering.vcf.gz
 
+# Retain only SNPs passing all filters
 bcftools view \
     -f PASS \
     --threads 3 \
     -O z -o chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.hardfiltered.vcf.gz \
     chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.filtering.vcf.gz
 
+# Extract only INDEL variants from raw variants
 gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" SelectVariants \
     -V chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.vcf.gz \
     -select-type INDEL \
     -O chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INDELs.vcf.gz
 
+# Apply hard filters to INDEL variants
 gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" VariantFiltration \
     --variant chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INDELs.vcf.gz  \
     --filter "QD < 2.0" --filter-name "QD2" \
@@ -104,24 +112,27 @@ gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" VariantFiltration \
     --filter "ReadPosRankSum < -20.0" --filter-name "ReadPosRankSum-20" \
     --output chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INDELs.filtering.vcf.gz 
 
+# Retain only INDELs passing all filters
 bcftools view \
     -f PASS \
     --threads 3 \
     -O z -o chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INDELs.hardfiltered.vcf.gz \
     chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INDELs.filtering.vcf.gz
 
-# 新增非变异位点过滤
+# Extract invariant (non-variant) sites
 gatk --java-options "-Xmx20000M -XX:ParallelGCThreads=3" SelectVariants \
     -V chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.vcf.gz \
     --select-type-to-include NO_VARIATION \
     -O chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INVARIANT.vcf.gz
 
+# Filter invariant sites by missingness (<25%)
 bcftools +fill-tags chrm_vcf/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INVARIANT.vcf.gz  -t F_MISSING | bcftools view -i 'F_MISSING<0.25' -Oz -o chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INVARIANT.hardfiltered.vcf.gz
 
+# Index VCF files for quick access
 tabix -p vcf chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.INVARIANT.hardfiltered.vcf.gz
-
 tabix -p vcf chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.hardfiltered.vcf.gz
 
+# Combine SNPs and invariant sites, then sort and compress the result
 bcftools concat \
     --allow-overlaps \
     chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_variants.SNPs.hardfiltered.vcf.gz \
@@ -131,6 +142,5 @@ bcftools concat \
     -o chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_allsites.hardfiltered.vcf.gz \
     -
 
+# Index the final combined VCF file
 tabix -p vcf chrm_vcf/hardfilter/Amphioxus_bf_35inds_autosome_highdepth_${prefix}_allsites.hardfiltered.vcf.gz
-
-
