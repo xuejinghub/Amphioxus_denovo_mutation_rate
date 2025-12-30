@@ -25,6 +25,7 @@ ALL softwares used in the scripts are open source and available on the internet.
 6. Effective population size
 7. PZMs detection
 8. Amplicon sequencing
+9. nonbubble classification (new add)
 * plot
 * scripts
 
@@ -56,6 +57,9 @@ Identifying the candidate post-zygotic mutations (PZMs) were performed using the
 
 ### 8. Amplicon sequencing
 To assess the reliability of DNMs across different data sources, we randomly selected a subset for validation by amplifying target regions with specific primers, followed by amplicon sequencing for genotyping. 
+
+### 9. nonbubble classification (new add)
+By combining information from contig self-alignments and the genome-wide distribution of contig-level read depths, we distinguished true non-bubble contigs (homozygous sequence) from “bubble-like” contigs (heterozygous sequence), while designating the remainder as uncertain non-bubble contigs.
 
 ### plot
 R scripts for generating the figures in the manuscript.  
