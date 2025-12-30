@@ -58,7 +58,7 @@ Identifying the candidate post-zygotic mutations (PZMs) were performed using the
 ### 8. Amplicon sequencing
 To assess the reliability of DNMs across different data sources, we randomly selected a subset for validation by amplifying target regions with specific primers, followed by amplicon sequencing for genotyping. 
 
-### 9. nonbubble classification (new add)
+### 9. nonbubble classification (newly add)
 By combining information from contig self-alignments and the genome-wide distribution of contig-level read depths, we distinguished true non-bubble contigs (homozygous sequence) from “bubble-like” contigs (heterozygous sequence), while designating the remainder as uncertain non-bubble contigs.
 
 ### plot
