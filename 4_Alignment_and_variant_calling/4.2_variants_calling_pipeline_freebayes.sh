@@ -32,6 +32,9 @@ INDEX=reference/Bf_MP_platanus_i3_allPhasedScaffold.rename.min150bp.fa
 startTime=`date +%Y%m%d-%H:%M:%S`
 startTime_s=`date +%s`
 
+source /public/home/xuejing/mambaforge/etc/profile.d/conda.sh
+conda activate freebayes
+
 # Step 0: Check if the bed of CG is generated
 if [ ! -e bed/Bf-${id}_platanus_i3_allPhasedScaffold.rename.min150bp.fa.bed ]
 then
@@ -49,27 +52,74 @@ freebayes -f ${INDEX} \
     | bgzip -c > vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz
 tabix -p vcf vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz
 
+source /public/home/xuejing/mambaforge/etc/profile.d/conda.sh
+conda activate base
+
 ## Step 2: Filter variants
 bcftools isec \
     -n~100 \
     -c all \
-    -p tmp/${prefix}.out vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz  \
-    Bf_P.mem2.default_min150_phased.md.uniq.bcftools.vcf.gz \
-    Bf_M.mem2.default_min150_phased.md.uniq.bcftools.vcf.gz
+    -p tmp/${prefix}.out \
+    vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz  \
+    vcf/Bf_M.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz \
+    vcf/Bf_P.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz
+
 
 cut -f1,2 tmp/${prefix}.out/sites.txt > tmp/${prefix}.out/sites.list
 bcftools view  \
     -R tmp/${prefix}.out/sites.list \
-    vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz -Ov |\
+    vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz -Ov | \
+    bcftools norm -m -any | \
+    bcftools norm -a -f ${INDEX} | \
     bcftools view  \
     -v snps -e '(INFO/DP)-(INFO/AO)>2 || INFO/DP <= 10' \
     -Oz -o vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.vcf.gz - \
-    && tabix -p vcf vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.vcf.gz
-bcftools norm -f ${INDEX} vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.vcf.gz -Oz -o vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.vcf.gz && tabix -p vcf vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.vcf.gz
-python filter_vcf.py --in vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.vcf.gz --bam bam/Bf_P.mem2..md.uniq.bam --bam bam/Bf_M.mem2..md.uniq.bam --out vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.filtered.vcf
+    && tabix -p vcf vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.vcf.gz
+python script/filter_vcf.py --in vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.vcf.gz --bam ${user_home}/Amphioxus/new_align/reassembly/read_align/reference/read_align/bam/Bf_P.mem2..md.uniq.bam --bam ${user_home}/Amphioxus/new_align/reassembly/read_align/reference/read_align/bam/Bf_M.mem2..md.uniq.bam --out vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.filtered.vcf
 
 cat vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.filtered.vcf | grep -v "#" |  grep "TYPE=snp" > result/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.noMP.norm.filtered.vcf
 
+
+source /public/home/xuejing/mambaforge/etc/profile.d/conda.sh
+conda activate freebayes
+
+## Step 3: Freebayes calling unphased variants 
+if [ ! -e vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.unphased.vcf.gz.tbi ]
+then
+freebayes -f ${INDEX} \
+    -m 0 \
+    --legacy-gls \
+    -t ${user_home}/Amphioxus/new_align/reassembly/read_align/non_bubble/inheritance/similarity_analysis/postprocess_result/${prefix}/${prefix}.contig_inheritance_v0.8.postprocess_v0.9.callablegenome_v0.3.uncallableE3.bed \
+    ${user_home}/Amphioxus/new_align/reassembly/read_align/default/bam/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.rename.min150bp.md.uniq.bam \
+    | bgzip -c > vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.unphased.vcf.gz
+tabix -f -p vcf vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.unphased.vcf.gz
+fi
+
+source /public/home/xuejing/mambaforge/etc/profile.d/conda.sh
+conda activate base
+
+## Step 4: Filter unphased variants
+bcftools isec \
+    -n~100 \
+    -c all \
+    -p tmp/${prefix}.unphased.out \
+    vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.unphased.vcf.gz  \
+    vcf/Bf_M.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz \
+    vcf/Bf_P.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.vcf.gz
+
+cut -f1,2 tmp/${prefix}.unphased.out/sites.txt > tmp/${prefix}.unphased.out/sites.list
+bcftools view  \
+    -R tmp/${prefix}.unphased.out/sites.list \
+    vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.md.uniq.freebayes.unphased.vcf.gz -Ov | \
+    bcftools norm -m -any | \
+    bcftools norm -a -f ${INDEX} | \
+    bcftools view  \
+    -v snps -e '(INFO/DP)-(INFO/AO)>2 || INFO/DP <= 10' \
+    -Oz -o vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.unphased.noMP.norm.vcf.gz - \
+    && tabix -f -p vcf vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.unphased.noMP.norm.vcf.gz
+python script/filter_vcf.py --in vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.unphased.noMP.norm.vcf.gz --bam ${user_home}/Amphioxus/new_align/reassembly/read_align/reference/read_align/bam/Bf_P.mem2..md.uniq.bam --bam ${user_home}/Amphioxus/new_align/reassembly/read_align/reference/read_align/bam/Bf_M.mem2..md.uniq.bam --out vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.unphased.noMP.norm.filtered.vcf
+
+cat vcf/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.unphased.noMP.norm.filtered.vcf | grep -v "#" |  awk  '$0!~/TYPE=indel/' > result/${prefix}.mem2.Bf_MP_platanus_i3_allPhasedScaffold_phased.md.uniq.freebayes.unphased.noMP.norm.filtered.vcf
 
 endTime=`date +%Y%m%d-%H:%M:%S`
 endTime_s=`date +%s`

@@ -10,5 +10,11 @@ then
     cp bam/Bf-${SLURM_ARRAY_TASK_ID}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.rename.min150bp.md.uniq.bam.depth.per-base.bed.gz bam/Bf-${SLURM_ARRAY_TASK_ID}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.rename.min150bp.md.uniq.bam.depth.per-base.bed.gz
 fi
 
-python contig_analysis_v0.8.py -p Bf_P.mem2..md.uniq.bam.depth.per-base.bed.gz  -m Bf_M.mem2..md.uniq.bam.depth.per-base.bed.gz  --progeny bam/Bf-${SLURM_ARRAY_TASK_ID}.mem2.Bf_MP_platanus_i3_allPhasedScaffold.rename.min150bp.md.uniq.bam.depth.per-base.bed.gz  --threshold 0.9 --pr_id Bf-${SLURM_ARRAY_TASK_ID} --processes 20 -o result/Bf-${SLURM_ARRAY_TASK_ID}.contig_inheritance_v0.8.out --method hybrid
+python scripts/contig_postprocess_v0.9.py \
+  -i result/${prefix}.contig_inheritance_v0.8.out \
+  -o postprocess_result/${prefix}/${prefix}.contig_inheritance_v0.8.postprocess_v0.9.out \
+  --bubblelike test/Bf_MP_rbh_bubblelikecontigs_1to1.0.7.0.7.list \
+  --len-col length \
+  -r test/Bf_MP.real_nonbubble.checked.list \
+  --drop_two_similar
 

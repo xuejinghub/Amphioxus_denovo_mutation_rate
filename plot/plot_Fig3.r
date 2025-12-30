@@ -706,7 +706,7 @@ plot_onemer_proportion_ssDNM <- ggplot( # nolint
         x == "C_A" ~ "C>A",
         x == "A_T" ~ "A>T",
         x == "A_G" ~ "A>G",
-        TRUE ~ x 
+        TRUE ~ x
       )
     }
   ) +
